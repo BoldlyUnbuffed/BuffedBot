@@ -2,6 +2,7 @@ import discord
 import json
 
 from discord.ext import commands
+from buffedbot.help import CustomHelpCommand
 from buffedbot.system import System
 
 with open('config.json') as f:
@@ -10,7 +11,7 @@ with open('config.json') as f:
 intents = discord.Intents.default()
 intents.message_content = True
 
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix='!', intents=intents, help_command=CustomHelpCommand())
 
 permissions = discord.Permissions()
 permissions.manage_messages = True
