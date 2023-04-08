@@ -2,3 +2,4 @@ sqlite.db
 guilds/
 **/__pycache__/
 config.json
+settings.json

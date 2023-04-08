@@ -59,10 +59,9 @@ class System(commands.Cog, name='system'):
     async def load_extensions(self):
         print('Loading extensions...')
         exts = await get_extensions()
-        print(f'Extensions: {exts}')
         for ext in exts:
             await self.load_extension(ext)
-        print('Done loading extensions.')
+        print('Done.')
 
     async def unload_extensions(self):
         print('Unloading extensions...')
@@ -72,7 +71,7 @@ class System(commands.Cog, name='system'):
         print('Done unloading extensions.')
 
     @staticmethod
-    def run(bot, config):
+    async def start(bot, config):
         discord.utils.setup_logging()
         
         @bot.event
@@ -94,18 +93,19 @@ class System(commands.Cog, name='system'):
                     print(f'Change detected in {change[1]} ({ext}).') 
                     if not ext in bot.extensions:
                         continue
-                    print(f'-> Reloading extension {ext}.')
+                    print(f'-> Reloading extension {ext}...', end='')
                     try:
                         await bot.reload_extension(ext)
-                        print(f'-> Done.')
+                        print(f' done.')
                     except Exception as e:
                         print(f'-> Failed.')
                         logging.exception(f'Failed to reload extensions {ext}')
-        
-        async def start():
-            await asyncio.gather(*[bot.start(config['token']), watch()])
 
-        asyncio.run(start())
+        await asyncio.gather(*[bot.start(config['token']), watch()])
+
+    @staticmethod
+    def run(bot, config):
+        asyncio.run(System.start(bot, config))
 
 def get_basedir():
     # This must remain in sync with the actual system.py location
