@@ -1,8 +1,24 @@
-from discord.ext import commands
 import aiosqlite
+
+from discord.ext import commands
 from asyncio import gather
 from aiopath import PurePath, AsyncPath
 
+def dict_compact(dict):
+    return {k:dict[k] for k in dict if dict[k] != None}
+
+def get_column_names(dict,/, wrap_brackets=True):
+    key_list = ",".join(dict.keys())
+    if not wrap_brackets:
+        return key_list
+    return f'({key_list})'
+
+def get_placeholder_names(dict):
+    return f'({(",".join([f":{k}" for k in dict]))})'
+
+
+def get_placeholder_values(dict):
+    return tuple(dict.values())
 
 DB_FILENAME = 'sqlite.db'
 
@@ -49,7 +65,6 @@ class SQLite(commands.Cog, name='sqlite'):
 
     async def connect_guild_db(self, guild):
         return await aiosqlite.connect(self.get_guild_db_path(guild))
-
 
 async def setup(bot):
     await bot.get_cog('system').load_extension('guildstorage')
