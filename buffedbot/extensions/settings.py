@@ -1,4 +1,5 @@
 from discord.ext import commands
+from buffedbot.extensions.guildstorage import GuildStorage
 from buffedbot.checks import is_guild_owner, unreleased
 from buffedbot.strings import SOMETHING_WENT_WRONG
 from aiopath import AsyncPath, PurePath
@@ -35,8 +36,6 @@ class Settings(commands.Cog, name='settings'):
         self.bot = bot
 
     async def cog_load(self):
-        self.settings = dict()
-
         guilds = self.bot.guilds
         self.guild_settings = dict([(guild.id, dict()) for guild in guilds])
 
@@ -282,8 +281,12 @@ class Settings(commands.Cog, name='settings'):
             raise commands.GuildNotFound(guild)
         return self.guild_settings[guild.id]
 
-    def get_guild_settings_filepath(self, guild):
+    def get_guild_storage(self, guild) -> GuildStorage:
         storage = self.bot.get_cog('guildstorage')
+        return storage
+
+    def get_guild_settings_filepath(self, guild):
+        storage = self.get_guild_storage(guild)
         guild_storage = storage.get_guild_storage_path(guild)
         guild_settings_path = PurePath(guild_storage, SETTINGS_FILENAME)
         return str(guild_settings_path)
