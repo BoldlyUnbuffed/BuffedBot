@@ -25,7 +25,7 @@ HIDDEN_KEYS = [RESTRICTED_SETTINGS_KEY]
 def get_settings_list(settings, restricted_list):
     if not len(settings):
         return NO_SETTINGS
-    
+
     body = '\n'.join([f'{k}{"*" if k in restricted_list else ""} = {settings[k]}' for k in settings if k not in HIDDEN_KEYS])
     return f'{SETTINGS_HEADER}\n' + body
 
@@ -97,7 +97,7 @@ class Settings(commands.Cog, name='settings'):
         async with ctx.typing():
             await self.restrict(setting)
             await ctx.reply(SETTING_RESTRICTED)
-    
+
     @command_settings.command(name='unrestrict')
     @commands.is_owner()
     async def command_unrestrict(self, ctx, setting):
@@ -221,7 +221,7 @@ class Settings(commands.Cog, name='settings'):
 
     async def guild_restrict(self, guild, setting):
         restricted_settings = set(self.guild_get(
-            guild, 
+            guild,
             RESTRICTED_SETTINGS_KEY,
             [])
         )
@@ -230,13 +230,13 @@ class Settings(commands.Cog, name='settings'):
 
     async def guild_unrestrict(self, guild, setting):
         restricted_settings = set(self.guild_get(
-            guild, 
+            guild,
             RESTRICTED_SETTINGS_KEY,
             [])
         )
         restricted_settings.remove(setting)
         await self.guild_set(guild, RESTRICTED_SETTINGS_KEY, list(restricted_settings))
-    
+
     async def guild_set(self, guild, setting, value):
         settings = self.get_guild_settings(guild)
         settings[setting] = value
@@ -290,10 +290,10 @@ class Settings(commands.Cog, name='settings'):
         guild_storage = storage.get_guild_storage_path(guild)
         guild_settings_path = PurePath(guild_storage, SETTINGS_FILENAME)
         return str(guild_settings_path)
-    
+
     def coalesce(self, guild, setting, default):
         return self.guild_get(guild, setting, self.get(setting, default))
-    
+
     async def cog_command_error(self, ctx, error):
         # TODO: Better exception translation
         verbose_exceptions = [commands.UserInputError, commands.CheckFailure]
@@ -302,7 +302,7 @@ class Settings(commands.Cog, name='settings'):
         elif isinstance(error, commands.CommandError):
             await ctx.reply(f'*{SOMETHING_WENT_WRONG}*')
         raise error
-    
+
 async def setup(bot):
     parent = bot
     await bot.get_cog('system').load_extension('guildstorage')

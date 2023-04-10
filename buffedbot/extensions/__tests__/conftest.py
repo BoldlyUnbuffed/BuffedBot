@@ -7,10 +7,17 @@ from collections import namedtuple
 from buffedbot.extensions.guildstorage import GuildStorage
 from discord.ext import commands
 
+
+def pytest_configure(config):
+    # register additional markers
+    config.addinivalue_line(
+        "markers", "isowner(true_or_false): marks if the author is considered owner of the bot"
+    )
+
 def aio_mock_open(file_mock):
     register_aiofiles_mock()
 
-    return mock.patch('aiofiles.threadpool.sync_open', return_value=file_mock) 
+    return mock.patch('aiofiles.threadpool.sync_open', return_value=file_mock)
 
 @contextmanager
 def _aio_mock_file():
@@ -56,7 +63,7 @@ def register_aiofiles_mock():
     aiofiles.threadpool.wrap.register(mock.MagicMock)( # type: ignore
         lambda *args,
         **kwargs: aiofiles.threadpool.AsyncBufferedIOBase( # type: ignore
-            *args, 
+            *args,
             **kwargs
         )
     )
@@ -76,9 +83,22 @@ def create_get_cog_mock(mock_bot):
     mock_bot.get_cog = lambda cog: cogs[cog]
     return _add_cog
 
+def make_guild(id):
+    return namedtuple('Guild', ['id'])(id)
+
+def make_context(bot, guild=None):
+    return namedtuple(
+        'Context',
+        ['bot', 'guild', 'reply', 'author']
+    )(bot, guild, mock.AsyncMock(), mock.Mock())
+
 @pytest.fixture
 def default_guild():
-    return namedtuple('Guild', ['id'])(1234567890)
+    return make_guild(123456789)
+
+@pytest.fixture
+def other_guild():
+    return make_guild(987654321)
 
 @pytest.fixture
 def guilds(default_guild):
@@ -86,6 +106,17 @@ def guilds(default_guild):
 
 @pytest.fixture
 def mock_bot(request, guilds):
+    marker = request.node.get_closest_marker('isowner')
+    if marker is None:
+        is_owner = True
+    else:
+        is_owner = marker.args[0]
+
     bot = mock.Mock()
+    bot.is_owner = mock.AsyncMock(return_value=is_owner)
     bot.guilds = guilds
     return bot
+
+@pytest.fixture
+def default_guild_context(default_guild, mock_bot):
+    return make_context(mock_bot, guild=default_guild)
