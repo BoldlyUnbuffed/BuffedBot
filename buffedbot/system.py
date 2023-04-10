@@ -124,6 +124,8 @@ async def get_extensions() -> list[str]:
     dir = AsyncPath(get_ext_dir())
     async for f in dir.iterdir():
         if await f.is_dir():
+            if f.name.startswith('__'):
+                continue
             if not await f.joinpath('__init__.py').exists():
                 continue
         elif not f.match('*.py'):
