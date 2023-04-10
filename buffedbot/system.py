@@ -65,7 +65,9 @@ class System(commands.Cog, name='system'):
 
     async def unload_extensions(self):
         print('Unloading extensions...')
-        for ext in await get_extensions().reverse():
+        exts = await get_extensions()
+        exts.reverse()
+        for ext in exts:
             # We are awaiting each extension at a time to maintain order
             await self.unload_extension(ext)
         print('Done unloading extensions.')
@@ -117,7 +119,7 @@ def to_extension_name(path):
 def get_ext_dir():
     return str(PurePath(get_basedir(), 'buffedbot', 'extensions'))
 
-async def get_extensions():
+async def get_extensions() -> list[str]:
     extensions = []
     dir = AsyncPath(get_ext_dir())
     async for f in dir.iterdir():
