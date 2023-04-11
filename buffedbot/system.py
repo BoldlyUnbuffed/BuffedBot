@@ -9,7 +9,7 @@ from discord.ext import commands
 from watchfiles import awatch, Change
 
 class System(commands.Cog, name='system'):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
         ext_dir = get_ext_dir()
         if not ext_dir in sys.path:
@@ -19,19 +19,22 @@ class System(commands.Cog, name='system'):
         return await commands.is_owner().predicate(ctx)
 
     async def load_extension(self, ext):
-        if ext not in self.bot.extensions:
+        fqn = to_qualified_extension_name(ext)
+        if fqn not in self.bot.extensions:
             print(f'+ Loading {ext}')
-            await self.bot.load_extension(ext)
+            await self.bot.load_extension(fqn)
 
     async def unload_extension(self, ext):
+        fqn = to_qualified_extension_name(ext)
         if ext in self.bot.extensions:
             print(f'- Unloading {ext}')
-            await self.bot.unload_extension(ext)
+            await self.bot.unload_extension(fqn)
 
     async def reload_extension(self, ext):
-        if ext in self.bot.extensions:
+        fqn = to_qualified_extension_name(ext)
+        if fqn in self.bot.extensions:
             print(f'o Reloading {ext}')
-            await self.bot.reload_extension(ext)
+            await self.bot.reload_extension(fqn)
 
 
     @commands.group(name='system')
@@ -75,7 +78,7 @@ class System(commands.Cog, name='system'):
     @staticmethod
     async def start(bot, config):
         discord.utils.setup_logging()
-        
+
         @bot.event
         async def on_ready():
             print(f'We have logged in as {bot.user}')
@@ -92,12 +95,13 @@ class System(commands.Cog, name='system'):
                     if not change[0] == Change.modified:
                         continue
                     ext = to_extension_name(change[1])
-                    print(f'Change detected in {change[1]} ({ext}).') 
-                    if not ext in bot.extensions:
+                    print(f'Change detected in {change[1]} ({ext}).')
+                    fqn = to_qualified_extension_name(ext)
+                    if not fqn in bot.extensions:
                         continue
                     print(f'-> Reloading extension {ext}...', end='')
                     try:
-                        await bot.reload_extension(ext)
+                        await bot.reload_extension(fqn)
                         print(f' done.')
                     except Exception as e:
                         print(f'-> Failed.')
@@ -111,10 +115,16 @@ class System(commands.Cog, name='system'):
 
 def get_basedir():
     # This must remain in sync with the actual system.py location
-    return os.path.dirname(PurePath(__file__).parent)
+    return str(PurePath(__file__).parent.parent)
+
+def to_qualified_extension_name(name):
+    return str(PurePath(get_ext_dir(),name).relative_to(get_basedir())).replace(os.sep, '.')
 
 def to_extension_name(path):
-    return str(PurePath(path).relative_to(get_ext_dir())).replace(os.sep, '.').removesuffix('.__init__.py').removesuffix('.py')
+    relative_path = PurePath(path).relative_to(get_ext_dir())
+    if len(relative_path.parents) == 1:
+        return relative_path.stem
+    return relative_path.parents[-2]
 
 def get_ext_dir():
     return str(PurePath(get_basedir(), 'buffedbot', 'extensions'))

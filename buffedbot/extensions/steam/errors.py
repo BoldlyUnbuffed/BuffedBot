@@ -1,5 +1,3 @@
-print('ERRORS.PY RAN')
-
 class GameNotFoundError(RuntimeError):
     def __init__(self, game, suggestion=None):
         super().__init__()

@@ -1,5 +1,5 @@
 from datetime import datetime
-from http.cookies import Morsel, SimpleCookie
+from http.cookies import SimpleCookie
 import re
 from typing import TypedDict
 from aiopath import PurePath
@@ -8,9 +8,9 @@ from discord.ext import commands
 from discord import Embed
 from aiohttp import ClientSession
 from bs4 import BeautifulSoup, Tag
-from buffedbot.extensions.sqlite import dict_compact, get_column_names, get_placeholder_names, get_placeholder_values
+from buffedbot.extensions.sqlite import get_column_names, get_placeholder_names, get_placeholder_values
 from urllib.parse import urlencode, urljoin, urlparse, urlunparse
-from . import GameNotFoundError, AttributeNotFoundError, ElementNotFoundError
+from .errors import GameNotFoundError, AttributeNotFoundError, ElementNotFoundError
 
 from yarl import URL
 
@@ -144,6 +144,10 @@ class SteamGameSoup():
         return self.get_text(('span[itemprop=name]'))
 
 class Steam(commands.Cog, name='steam'):
+    GameNotFoundError = GameNotFoundError
+    AttributeNotFoundError = AttributeNotFoundError
+    ElementNotFoundError = ElementNotFoundError
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
@@ -374,5 +378,3 @@ async def setup(bot):
 
 async def teardown(bot):
     await bot.remove_cog('Steam')
-
-print('SETUP STEAM')
