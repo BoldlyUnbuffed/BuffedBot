@@ -273,6 +273,7 @@ class Steam(commands.Cog, name='steam'):
                 return row[0]
 
     async def get_game_from_cache(self, normalized_url: str) -> Game|None:
+        CACHE_EXPIRATION = '+1 days'
         app_id = __class__.get_app_id_from_url(normalized_url)
         sql = f'''
             SELECT
@@ -280,7 +281,7 @@ class Steam(commands.Cog, name='steam'):
             FROM
                 steam_games_cache
             WHERE
-                app_id = ? AND DATETIME(date_created, '+1 days') > DATETIME('now')
+                app_id = ? AND DATETIME(date_created, '{CACHE_EXPIRATION}') > DATETIME('now')
         '''
         async with await self.db.execute(sql, (app_id,)) as cursor:
             async for row in cursor:
@@ -316,13 +317,7 @@ class Steam(commands.Cog, name='steam'):
             ON CONFLICT
                 (app_id)
             DO UPDATE SET
-                name = excluded.name,
-                url = excluded.url,
-                description = excluded.description,
-                price = excluded.price,
-                review_count = excluded.review_count,
-                review_summary = excluded.review_summary,
-                date_created = DATETIME(excluded.date_created)
+                {", ".join([f"{name} = excluded.{name}" for name in game.keys()])}
             WHERE
                 date_created < excluded.date_created
         '''
