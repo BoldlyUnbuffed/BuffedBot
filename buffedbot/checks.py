@@ -4,7 +4,7 @@ def is_guild_owner():
     async def predicate(ctx):
         return ctx.guild and ctx.guild.owner == ctx.author
     return commands.check(predicate)
-    
+
 def is_test_guild():
     async def predicate(ctx):
         settings = ctx.bot.get_cog('settings')
