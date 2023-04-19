@@ -8,7 +8,8 @@ from aiopath import AsyncPath, PurePath
 from discord.ext import commands
 from watchfiles import awatch, Change
 
-class System(commands.Cog, name='system'):
+
+class System(commands.Cog, name="system"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         ext_dir = get_ext_dir()
@@ -21,59 +22,58 @@ class System(commands.Cog, name='system'):
     async def load_extension(self, ext):
         fqn = to_qualified_extension_name(ext)
         if fqn not in self.bot.extensions:
-            print(f'+ Loading {ext}')
+            print(f"+ Loading {ext}")
             await self.bot.load_extension(fqn)
 
     async def unload_extension(self, ext):
         fqn = to_qualified_extension_name(ext)
         if ext in self.bot.extensions:
-            print(f'- Unloading {ext}')
+            print(f"- Unloading {ext}")
             await self.bot.unload_extension(fqn)
 
     async def reload_extension(self, ext):
         fqn = to_qualified_extension_name(ext)
         if fqn in self.bot.extensions:
-            print(f'o Reloading {ext}')
+            print(f"o Reloading {ext}")
             await self.bot.reload_extension(fqn)
 
-
-    @commands.group(name='system')
+    @commands.group(name="system")
     async def system(self, ctx):
         pass
 
-    @system.command(name='unload')
+    @system.command(name="unload")
     async def extensions_unload(self, ctx, ext):
         async with ctx.typing():
             await self.unload_extension(ext)
-            await ctx.reply(f'Unloaded {ext}.')
+            await ctx.reply(f"Unloaded {ext}.")
 
-    @system.command(name='load')
+    @system.command(name="load")
     async def extensions_load(self, ctx, ext):
         async with ctx.typing():
             await self.load_extension(ext)
-            await ctx.reply(f'Loaded {ext}.')
+            await ctx.reply(f"Loaded {ext}.")
 
-    @system.command(name='reload')
+    @system.command(name="reload")
     async def extensions_reload(self, ctx, ext):
         async with ctx.typing():
             await self.reload_extension(ext)
-            await ctx.reply(f'Reloaded {ext}.')
+            await ctx.reply(f"Reloaded {ext}.")
 
     async def load_extensions(self):
-        print('Loading extensions...')
+        print("Loading extensions...")
         exts = await get_extensions()
         for ext in exts:
             await self.load_extension(ext)
-        print('Done.')
+        print("Done.")
 
     async def unload_extensions(self):
-        print('Unloading extensions...')
+        print("Unloading extensions...")
         exts = await get_extensions()
         exts.reverse()
         for ext in exts:
             # We are awaiting each extension at a time to maintain order
             await self.unload_extension(ext)
-        print('Done unloading extensions.')
+        print("Done unloading extensions.")
 
     @staticmethod
     async def start(bot, config):
@@ -81,9 +81,9 @@ class System(commands.Cog, name='system'):
 
         @bot.event
         async def on_ready():
-            print(f'We have logged in as {bot.user}')
+            print(f"We have logged in as {bot.user}")
             await bot.add_cog(System(bot))
-            await bot.get_cog('system').load_extensions()
+            await bot.get_cog("system").load_extensions()
 
         async def watch():
             ext_dir = get_ext_dir()
@@ -95,30 +95,35 @@ class System(commands.Cog, name='system'):
                     if not change[0] == Change.modified:
                         continue
                     ext = to_extension_name(change[1])
-                    print(f'Change detected in {change[1]} ({ext}).')
+                    print(f"Change detected in {change[1]} ({ext}).")
                     fqn = to_qualified_extension_name(ext)
                     if not fqn in bot.extensions:
                         continue
-                    print(f'-> Reloading extension {ext}...', end='')
+                    print(f"-> Reloading extension {ext}...", end="")
                     try:
                         await bot.reload_extension(fqn)
-                        print(f' done.')
+                        print(f" done.")
                     except Exception as e:
-                        print(f'-> Failed.')
-                        logging.exception(f'Failed to reload extensions {ext}')
+                        print(f"-> Failed.")
+                        logging.exception(f"Failed to reload extensions {ext}")
 
-        await asyncio.gather(*[bot.start(config['token']), watch()])
+        await asyncio.gather(*[bot.start(config["token"]), watch()])
 
     @staticmethod
     def run(bot, config):
         asyncio.run(System.start(bot, config))
 
+
 def get_basedir():
     # This must remain in sync with the actual system.py location
     return str(PurePath(__file__).parent.parent)
 
+
 def to_qualified_extension_name(name):
-    return str(PurePath(get_ext_dir(),name).relative_to(get_basedir())).replace(os.sep, '.')
+    return str(PurePath(get_ext_dir(), name).relative_to(get_basedir())).replace(
+        os.sep, "."
+    )
+
 
 def to_extension_name(path):
     relative_path = PurePath(path).relative_to(get_ext_dir())
@@ -126,19 +131,21 @@ def to_extension_name(path):
         return relative_path.stem
     return relative_path.parents[-2]
 
+
 def get_ext_dir():
-    return str(PurePath(get_basedir(), 'buffedbot', 'extensions'))
+    return str(PurePath(get_basedir(), "buffedbot", "extensions"))
+
 
 async def get_extensions() -> list[str]:
     extensions = []
     dir = AsyncPath(get_ext_dir())
     async for f in dir.iterdir():
         if await f.is_dir():
-            if f.name.startswith('__'):
+            if f.name.startswith("__"):
                 continue
-            if not await f.joinpath('__init__.py').exists():
+            if not await f.joinpath("__init__.py").exists():
                 continue
-        elif not f.match('*.py'):
+        elif not f.match("*.py"):
             continue
         extensions.append(to_extension_name(f))
     extensions.sort()

@@ -1,7 +1,8 @@
 from discord.ext import commands
 
-def is_collapseable_cog(cog, get_commands): 
-    if not hasattr(cog, 'qualified_name'):
+
+def is_collapseable_cog(cog, get_commands):
+    if not hasattr(cog, "qualified_name"):
         return False
     if len(get_commands(cog)) != 1:
         return False
@@ -12,9 +13,10 @@ def is_collapseable_cog(cog, get_commands):
 
     return True
 
+
 # Implements a better help command based on the DefaultHelpCommand
 # The more I am working with Discord.py, the more I hate how Cogs
-# intermingle UI and programming paradigms. 
+# intermingle UI and programming paradigms.
 # On the one hand, Cogs are a great way to organize code, share it
 # between bots and between different cogs, but on the other hand
 # they are tightly coupled with the UI through the DefaultHelpCommand
@@ -40,7 +42,7 @@ class CustomHelpCommand(commands.DefaultHelpCommand):
 
         return mapping
 
-    async def send_cog_help(self, cog, /): 
+    async def send_cog_help(self, cog, /):
         if is_collapseable_cog(cog, lambda c: c.get_commands()):
             return await super().send_group_help(cog.get_commands()[0])
         return await super().send_cog_help(cog)
