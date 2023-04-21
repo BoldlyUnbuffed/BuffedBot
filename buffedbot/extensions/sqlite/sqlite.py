@@ -45,6 +45,8 @@ class SQLite(commands.Cog, name="sqlite"):
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild):
+        # Ensure guild path was created
+        await self.bot.get_cog("guildstorage").create_guild_storage(guild)
         self.guild_dbs[guild.id] = await self.connect_guild_db(guild)
 
     async def on_guild_remove(self, guild):
@@ -79,6 +81,3 @@ async def setup(bot):
 
 async def teardown(bot):
     await bot.remove_cog("SQLite")
-
-
-print("SQLITE.PY")

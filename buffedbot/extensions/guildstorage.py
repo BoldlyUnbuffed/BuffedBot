@@ -21,11 +21,11 @@ async def rmtree(name):
 class GuildStorage(commands.Cog, name="guildstorage"):
     @commands.Cog.listener()
     async def on_guild_join(self, guild):
-        await GuildStorageCog.create_guild_storage(guild)
+        await GuildStorage.create_guild_storage(guild)
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild):
-        await GuildStorageCog.delete_guild_storage(guild)
+        await GuildStorage.delete_guild_storage(guild)
 
     @staticmethod
     def get_guild_storage_path(guild):
@@ -38,12 +38,12 @@ class GuildStorage(commands.Cog, name="guildstorage"):
 
     @staticmethod
     async def delete_guild_storage(guild):
-        path = GuildStorageCog.get_guild_storage_path(guild)
+        path = GuildStorage.get_guild_storage_path(guild)
         return await rmtree(path)
 
     @staticmethod
     async def create_guild_storage(guild):
-        path = GuildStorageCog.get_guild_storage_path(guild)
+        path = GuildStorage.get_guild_storage_path(guild)
         await AsyncPath(path).mkdir(parents=True, exist_ok=True)
         return path
 

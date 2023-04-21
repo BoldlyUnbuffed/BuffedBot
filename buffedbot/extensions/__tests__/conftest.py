@@ -174,7 +174,7 @@ def guilds(default_guild):
 
 @pytest.fixture
 def default_thread(default_guild):
-    return namedtuple("Thread", ["id", "guild", "reply"])(
+    return namedtuple("Thread", ["id", "guild", "send"])(
         8967452310, default_guild, mock.AsyncMock()
     )
 
