@@ -15,6 +15,10 @@ def pytest_configure(config):
         "markers",
         "isowner(true_or_false): marks if the author is considered owner of the bot",
     )
+    config.addinivalue_line(
+        "markers",
+        "asyncpathexists(true_or_false): marks AsyncPath exists return value",
+    )
 
 
 def aio_mock_open(file_mock):

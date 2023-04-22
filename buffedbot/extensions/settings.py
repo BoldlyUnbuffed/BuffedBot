@@ -114,6 +114,7 @@ class Settings(commands.Cog, name="settings"):
 
     async def load(self):
         if not await AsyncPath(SETTINGS_FILENAME).exists():
+            self.settings = {}
             return
         async with aiofiles.open(SETTINGS_FILENAME, "r") as f:
             self.settings = json.loads(await f.read())
