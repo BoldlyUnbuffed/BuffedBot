@@ -752,7 +752,7 @@ class LetsTry(
     @letstry.command(name="list")
     async def list(self, ctx, state: Optional[str]):
         """Shorthand for !letstry games list"""
-        return await ctx.invoke(self.bot.get_command("letstry games list"), state)
+        return await ctx.invoke(self.bot.get_command("letstry games list"), state=state)
 
     @letstry.command(name="ballots")
     async def ballots(self, ctx):
@@ -786,7 +786,9 @@ class LetsTry(
         See !help letstry games propose for details.
 
         """
-        return await ctx.invoke(self.bot.get_command("letstry games propose"), *name)
+        return await ctx.invoke(
+            self.bot.get_command("letstry games propose"), name=name
+        )
 
     @letstry.command(name="retract")
     async def retract(self, ctx):
