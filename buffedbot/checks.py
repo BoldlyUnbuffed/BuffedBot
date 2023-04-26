@@ -1,9 +1,13 @@
 from discord.ext import commands
 
 
+def is_guild_owner_pred(guild, user):
+    return guild is not None and guild.owner == user
+
+
 def is_guild_owner():
     async def predicate(ctx):
-        return ctx.guild and ctx.guild.owner == ctx.author
+        return is_guild_owner_pred(ctx.guild, ctx.author)
 
     return commands.check(predicate)
 
@@ -13,7 +17,7 @@ def is_test_guild():
         settings = ctx.bot.get_cog("settings")
         is_test_guild = False
         if settings and ctx.guild:
-            is_test_guild = settings.get("test_guild", None) == ctx.guild.id
+            is_test_guild = int(settings.get("test_guild", None)) == ctx.guild.id
         return is_test_guild
 
     return commands.check(predicate)

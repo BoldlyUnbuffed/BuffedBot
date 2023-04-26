@@ -1,6 +1,6 @@
 from discord.ext import commands
 from buffedbot.extensions.guildstorage import GuildStorage
-from buffedbot.checks import is_guild_owner, unreleased
+from buffedbot.checks import is_guild_owner
 from buffedbot.strings import SOMETHING_WENT_WRONG
 from aiopath import AsyncPath, PurePath
 from asyncio import gather
@@ -52,7 +52,6 @@ class Settings(commands.Cog, name="settings"):
         await gather(*loaders)
 
     @commands.group(name="settings")
-    @unreleased()
     @commands.check_any(is_guild_owner(), commands.is_owner())
     async def command_settings(self, ctx):
         pass

@@ -63,6 +63,7 @@ async def test_create_settings(settings: Settings):
     assert settings.settings is not None
     assert len(settings.settings) == 0
 
+
 @pytest.mark.asyncpathexists(False)
 @pytest.mark.asyncio
 async def test_create_settings_without_file(settings: Settings):
