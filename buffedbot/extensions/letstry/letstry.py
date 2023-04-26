@@ -410,7 +410,6 @@ class LetsTryBallotVoteView(discord.ui.View):
         self.embed_message = None
 
     async def interaction_check(self, interaction):
-        print("BALLOT VOTE CHECK")
         return await can_vote_ballots().predicate(make_interaction_context(interaction))
 
     async def on_error(self, interaction, error, item):
@@ -687,7 +686,6 @@ class CantVoteBallots(commands.CheckFailure):
 def is_ballot_thread():
     async def predicate(ctx):
         db = ctx.bot.get_cog("letstry").get_guild_db(ctx.guild)
-        print(f"Channel ID {ctx.channel.id} {ctx.channel}")
         if not await LetsTryBallot.exists(db, {"discord_thread_id": ctx.channel.id}):
             raise NotBallotThread(
                 f"The command {ctx.command} can only be run from within a ballot thread."
@@ -859,7 +857,6 @@ class LetsTry(
 
         Valid values for state are "orphaned", "submitted", "rejected", "accepted", "elected" and "done".
         """
-        print(f"state {state}")
         db = self.get_guild_db(ctx.guild)
         cur = await db.cursor()
         if not state:
