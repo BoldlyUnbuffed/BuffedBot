@@ -758,8 +758,10 @@ class LetsTry(
     async def ballots(self, ctx):
         """Lists ballots open for votes."""
         db = self.get_guild_db(ctx.guild)
-        where = {"state": "open"}
-        async with LetsTryBallot.select(db, where) as cursor:
+        sql = f"""{LetsTryBallot.select_stmt()} WHERE state in ("open", "submitted")"""
+        async with db.execute(sql) as cursor:
+            cursor.row_factory = LetsTryBallot.from_row
+            ballot = None
             async for ballot in cursor:
                 view = LetsTryBallotVoteNowView(db, ballot)
                 embed = ballot.as_embed()
@@ -772,6 +774,8 @@ class LetsTry(
 
                 message = await ctx.reply(embed=embed, view=view, silent=True)
                 view.setMessage(message)
+            if ballot is None:
+                await ctx.reply("*No ballots found.*")
 
     @can_propose()
     @letstry.command(name="propose")
