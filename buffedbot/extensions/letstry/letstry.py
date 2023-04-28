@@ -324,12 +324,14 @@ def sqldatarow(
                     self.update_stmt(self.primary_key_match().keys()),
                     self.placeholder_values,
                 )
+                await db.commit()
                 return cursor.rowcount
 
             async def delete(self, db):
                 where = self.primary_key_match()
                 sql = self.delete_stmt(where.keys())
                 cursor = await db.execute(sql, where)
+                await db.commit()
                 return cursor.rowcount
 
             @classmethod
