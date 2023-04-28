@@ -1215,7 +1215,7 @@ class LetsTry(
                 seconds = 0
                 dt = datetime.fromisoformat(duration_or_dt)
             except:
-                return ctx.reply(
+                return await ctx.reply(
                     f'"{duration_or_dt}" is not a valid ISO timestamp or time duraion. Valid values are e.g. "3 days" or "2023-06-03 23:00:00"'
                 )
 
