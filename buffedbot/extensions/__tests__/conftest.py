@@ -4,6 +4,7 @@ import unittest.mock as mock
 from aiopath import AsyncPath
 from contextlib import contextmanager
 from collections import namedtuple
+from buffedbot.extensions.settings import Settings
 from buffedbot.extensions.guildstorage import GuildStorage
 from buffedbot.extensions.steam import Steam
 from discord.ext import commands
@@ -180,6 +181,18 @@ def mock_guild_storage(create_get_cog_mock):
 
 
 @pytest.fixture
+def mock_settings(create_get_cog_mock, request):
+    s = mock.Mock(Settings)
+    create_get_cog_mock(Settings.__cog_name__, s)
+    marker = request.node.get_closest_marker("guildget")
+    if marker is None:
+        s.guild_get = mock.Mock(side_effect=lambda g, k, d: d)
+    else:
+        s.guild_get = mock.Mock(return_value=marker.args[0])
+    return s
+
+
+@pytest.fixture
 def mock_steam(create_get_cog_mock):
     steam = mock.Mock(Steam)
     create_get_cog_mock(Steam.__cog_name__, steam)
@@ -196,15 +209,19 @@ def create_get_cog_mock(mock_bot):
     return _add_cog
 
 
-def make_channel(spawned_thread=None):
-    return namedtuple("Channel", ["reply", "create_thread"])(
+def make_channel(guild, spawned_thread=None):
+    return namedtuple("Channel", ["reply", "create_thread", "guild", "send"])(
         mock.AsyncMock(),
         mock.AsyncMock(return_value=spawned_thread),
+        guild,
+        mock.AsyncMock(),
     )
 
 
 def make_guild(id):
-    return namedtuple("Guild", ["id"])(id)
+    return namedtuple("Guild", ["id", "get_channel_or_thread", "fetch_channel"])(
+        id, mock.Mock(), mock.AsyncMock()
+    )
 
 
 def make_user(id):
@@ -250,7 +267,7 @@ def default_thread(default_guild):
 
 
 @pytest.fixture
-def mock_bot(request, guilds):
+def mock_bot(request, default_guild):
     marker = request.node.get_closest_marker("isowner")
     if marker is None:
         is_owner = True
@@ -259,13 +276,13 @@ def mock_bot(request, guilds):
 
     bot = mock.Mock()
     bot.is_owner = mock.AsyncMock(return_value=is_owner)
-    bot.guilds = guilds
+    bot.guilds = [default_guild]
     return bot
 
 
 @pytest.fixture
-def default_channel(default_thread):
-    return make_channel(default_thread)
+def default_channel(default_thread, default_guild):
+    return make_channel(default_guild, default_thread)
 
 
 @pytest.fixture

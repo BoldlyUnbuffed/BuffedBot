@@ -999,21 +999,33 @@ class LetsTry(
 
         embed = await LetsTryBallotGame.as_embed(db, ballot)
         # Notify announcement channel about finished ballot
-        channel = self.get_announcement_channel(guild)
+        channel = await self.get_announcement_channel(guild)
+        if channel is None:
+            return
         await channel.send(
             "A ballot just completed! Congratulations to the winner!", embed=embed
         )
 
         # TODO: Notify proposers about election (mention on annoucement?)
 
-    def get_announcement_channel(self, guild):
+    async def get_announcement_channel(self, guild):
         channel_id = self.bot.get_cog("settings").guild_get(
-            guild, "letstry-announcement-channel"
+            guild, "letstry-announcement-channel", None
         )
-        channel = self.bot.get_channel(channel_id)
+        channel_id = channel_id and int(channel_id)
+        if channel_id is None:
+            return None
+
+        channel = guild.get_channel_or_thread(channel_id) or await guild.fetch_channel(
+            channel_id
+        )
+        if channel is None:
+            return None
+
         assert (
-            getattr(channel, "guild") == guild
+            getattr(channel, "guild", None) == guild
         ), "Can't announce to channels of a different server"
+
         return channel
 
     async def get_game(
@@ -1279,7 +1291,7 @@ class LetsTry(
         if any([isinstance(error, E) for E in verbose_exceptions]):
             return await ctx.reply(f"*{SOMETHING_WENT_WRONG}: {str(error)}*")
         await ctx.reply(f"*{SOMETHING_WENT_WRONG}*")
-        return await super().cog_command_error(ctx, error)
+        raise error
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild):
