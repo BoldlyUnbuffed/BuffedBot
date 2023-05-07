@@ -1,5 +1,7 @@
 PRAGMA foreign_keys = 1 ;
 
+BEGIN ;
+
 CREATE TABLE IF NOT EXISTS
   letstry_games (
     game_id INTEGER PRIMARY KEY,
@@ -237,3 +239,16 @@ BEGIN
       ballot_id = NEW.ballot_id
   );
 END ;
+
+CREATE TABLE IF NOT EXISTS
+  letstry_versions (
+    version INTEGER PRIMARY KEY
+  );
+
+INSERT INTO
+  letstry_versions
+VALUES
+  (0)
+ON CONFLICT DO NOTHING ;
+
+COMMIT ;

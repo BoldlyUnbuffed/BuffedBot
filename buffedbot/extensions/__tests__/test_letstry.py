@@ -903,3 +903,24 @@ async def test_finalize_ballots(
     default_channel.send.assert_called_with(
         StringContains("ballot just completed"), embed=mock.ANY
     )
+
+    await invoke_command(
+        letstry,
+        "letstry ballot show",
+        default_thread_context,
+    )
+    assert_called_with_ballot_embed(
+        default_thread_context.reply,
+        Nowish(),
+        Nowish(),
+        Nowish(),
+        "finalized",
+        [default_game_name, other_game_name],
+    )
+
+    await invoke_command(
+        letstry, "letstry games list", default_guild_context, "elected"
+    )
+    assert_called_with_game_embed(
+        default_guild_context.reply, 0, default_game_name, mock.ANY, "elected"
+    )

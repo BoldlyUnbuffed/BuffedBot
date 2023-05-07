@@ -1,13 +1,13 @@
 from collections import namedtuple
 from datetime import datetime, timedelta, timezone
 from discord.ext import commands, tasks
-from aiopath import PurePath
+from aiopath import PurePath, AsyncPath
 from buffedbot.checks import is_guild_owner
 from buffedbot.strings import SOMETHING_WENT_WRONG
 from buffedbot.errors import GameNotFoundError
 from buffedbot.extensions.steam import Game as SteamGame
 from asyncio import gather
-from sqlite3 import IntegrityError
+from sqlite3 import IntegrityError, Error as SQLiteError
 from typing import (
     Literal,
     TypeVar,
@@ -52,7 +52,7 @@ def an(thing: str) -> str:
 
 GameState = Literal["submitted", "accepted", "rejected", "elected", "done", "orphaned"]
 
-BallotState = Literal["staging", "open", "closed"]
+BallotState = Literal["staging", "open", "closed", "finalized"]
 
 
 def to_discord_relative_time(dt: datetime):
@@ -557,6 +557,7 @@ class LetsTryBallot:
     date_open: str
     date_close: str
     staging: int
+    finalized: int
     state: BallotState = virtual()
 
     def as_embed(self) -> discord.Embed:
@@ -969,33 +970,9 @@ class LetsTry(
 
     async def finalize_ballot(self, guild, ballot):
         db = self.get_guild_db(guild)
-        # Move game with highest votes to elected
-        sql = """
-            UPDATE
-                letstry_games
-            SET
-                state = 'elected'
-            WHERE
-                game_id = (
-                    SELECT
-                        game_id
-                    FROM
-                        letstry_ballot_games
-                        INNER JOIN
-                            letstry_ballots_view
-                        ON
-                            letstry_ballots_view.ballot_id = letstry_ballot_games.ballot_id AND
-                            letstry_ballots_view.state = 'closed'
-                    WHERE
-                        letstry_ballot_games.ballot_id = :ballot_id
-                    ORDER BY
-                        votes DESC
-                    LIMIT 1
-                )
-        """
-        async with db.execute(sql, {"ballot_id": ballot.ballot_id}) as cursor:
-            if not cursor.rowcount:
-                raise IntegrityError("Failed finalzing ballot")
+
+        ballot.finalized = True
+        await ballot.update(db)
 
         embed = await LetsTryBallotGame.as_embed(db, ballot)
         # Notify announcement channel about finished ballot
@@ -1183,8 +1160,8 @@ class LetsTry(
     async def ballot_duration(self, ctx, *, duration):
         seconds = timeparse(duration)
         if seconds is None:
-            return ctx.reply(
-                f'"{duration}" is not a valid time duraion. Valid durations are e.g. "3 days" or "1 week"'
+            return await ctx.reply(
+                f'"*{duration}" is not a valid time duraion. Valid durations are e.g. "3 days" or "1 week"*'
             )
 
         ballot = await self.get_ballot(ctx.channel)
@@ -1297,13 +1274,61 @@ class LetsTry(
     async def on_guild_join(self, guild):
         await self.bootstrap_guild(guild)
 
+    @staticmethod
+    def get_sql_scriptpath(filename):
+        return AsyncPath(os.path.dirname(__file__), "sql", filename)
+
+    async def migrate_db(self, guild):
+        version = await self.get_guild_db_version(guild)
+        migration_file = self.get_sql_scriptpath(f"migrate_from_v{version}.sql")
+        if not await migration_file.exists():
+            return False
+
+        print(f"> Migrating guild {guild.id} database from v{version}...", end="")
+        async with aiofiles.open(migration_file, mode="r") as file:
+            sql = await file.read()
+        db = self.get_guild_db(guild)
+
+        try:
+            await db.executescript(f"BEGIN TRANSACTION ; {sql}")
+            await db.execute(
+                "INSERT INTO letstry_versions VALUES(:version)", (version + 1,)
+            )
+            await db.commit()
+        except SQLiteError as e:
+            await db.rollback()
+            raise e
+        if await self.get_guild_db_version(guild) == version:
+            print(" FAILED.")
+            return False
+        print(" done.")
+        return True
+
+    async def get_guild_db_version(self, guild):
+        sql = """
+            SELECT
+                version
+            FROM
+                letstry_versions
+            ORDER BY
+                version DESC
+            LIMIT 1
+        """
+        db = self.get_guild_db(guild)
+        async with db.execute(sql) as cursor:
+            (version,) = await cursor.fetchone()
+
+        return version
+
     async def bootstrap_guild(self, guild):
-        path = PurePath(os.path.dirname(__file__), "bootstrap.sql")
+        path = PurePath(os.path.dirname(__file__), "sql", "bootstrap.sql")
         async with aiofiles.open(path, mode="r") as file:
             sql = await file.read()
         db = self.get_guild_db(guild)
         await db.executescript(sql)
         await db.commit()
+        while await self.migrate_db(guild):
+            pass
 
     async def cog_load(self):
         await gather(*[self.bootstrap_guild(guild) for guild in self.bot.guilds])
@@ -1317,32 +1342,10 @@ class LetsTry(
         await gather(*[self.finalize_guild_ballots(guild) for guild in self.bot.guilds])
 
     async def finalize_guild_ballots(self, guild):
-        # Probably should have a finalized column on ballots.
-        # Will need to add table versioning support though,
-        # before I can start adding table columns
-        sql = """
-            SELECT
-                *
-            FROM
-                letstry_ballots_view
-            WHERE
-                letstry_ballots_view.state = 'closed' AND
-                NOT EXISTS (
-                    SELECT 1 FROM
-                        letstry_ballot_games
-                        INNER JOIN
-                            letstry_games
-                        ON
-                            letstry_games.game_id = letstry_ballot_games.game_id
-                    WHERE
-                        letstry_ballot_games.ballot_id = letstry_ballots_view.ballot_id AND
-                        letstry_games.state = 'elected'
-                )
-        """
         db = self.get_guild_db(guild)
         gens = []
-        async with db.execute(sql) as cursor:
-            cursor.row_factory = LetsTryBallot.from_row
+        where = {"state": "closed"}
+        async with LetsTryBallot.select(db, where) as cursor:
             async for ballot in cursor:
                 gens.append(self.finalize_ballot(guild, ballot))
 
