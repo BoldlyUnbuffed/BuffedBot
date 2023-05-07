@@ -49,3 +49,10 @@ BEGIN
           LIMIT 1
       ) ;
 END ;
+
+UPDATE
+  letstry_ballots
+SET
+  finalized = TRUE
+WHERE
+  date_close > DATETIME('NOW') ;
