@@ -150,6 +150,19 @@ def inject_mock_file_read_data(mock_file):
     return _inject_read_data
 
 
+@pytest.fixture
+def inject_settings_guild_get(mock_settings):
+    map = {}
+    mock_settings.guild_get.side_effect = (
+        lambda _, param, default: map[param] if param in map else default
+    )
+
+    def _inject_guild_get(param, value):
+        map[param] = value
+
+    return _inject_guild_get
+
+
 def once(f):
     called = False
 
@@ -210,18 +223,26 @@ def create_get_cog_mock(mock_bot):
 
 
 def make_channel(guild, spawned_thread=None):
-    return namedtuple("Channel", ["reply", "create_thread", "guild", "send"])(
+    channel = namedtuple("Channel", ["id", "reply", "create_thread", "guild", "send"])(
+        1236547890,
         mock.AsyncMock(),
         mock.AsyncMock(return_value=spawned_thread),
         guild,
         mock.AsyncMock(),
     )
+    guild.channels.append(channel)
+    return channel
 
 
 def make_guild(id):
-    return namedtuple("Guild", ["id", "get_channel_or_thread", "fetch_channel"])(
-        id, mock.Mock(), mock.AsyncMock()
-    )
+    def get_channel_or_thread(id):
+        return [c for c in guild.channels if c.id == id][0]
+
+    guild = namedtuple(
+        "Guild", ["id", "get_channel_or_thread", "fetch_channel", "channels"]
+    )(id, mock.Mock(side_effect=get_channel_or_thread), mock.AsyncMock(), [])
+
+    return guild
 
 
 def make_user(id):

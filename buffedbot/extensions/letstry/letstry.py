@@ -1,6 +1,6 @@
 from collections import namedtuple
 from datetime import datetime, timedelta, timezone
-from discord.ext import commands
+from discord.ext import commands, tasks
 from aiopath import PurePath
 from buffedbot.checks import is_guild_owner
 from buffedbot.strings import SOMETHING_WENT_WRONG
@@ -1307,6 +1307,46 @@ class LetsTry(
 
     async def cog_load(self):
         await gather(*[self.bootstrap_guild(guild) for guild in self.bot.guilds])
+        self.finalize_ballots.start()
+
+    async def cog_unload(self):
+        self.finalize_ballots.cancel()
+
+    @tasks.loop(minutes=5.0)
+    async def finalize_ballots(self):
+        await gather(*[self.finalize_guild_ballots(guild) for guild in self.bot.guilds])
+
+    async def finalize_guild_ballots(self, guild):
+        # Probably should have a finalized column on ballots.
+        # Will need to add table versioning support though,
+        # before I can start adding table columns
+        sql = """
+            SELECT
+                *
+            FROM
+                letstry_ballots_view
+            WHERE
+                letstry_ballots_view.state = 'closed' AND
+                NOT EXISTS (
+                    SELECT 1 FROM
+                        letstry_ballot_games
+                        INNER JOIN
+                            letstry_games
+                        ON
+                            letstry_games.game_id = letstry_ballot_games.game_id
+                    WHERE
+                        letstry_ballot_games.ballot_id = letstry_ballots_view.ballot_id AND
+                        letstry_games.state = 'elected'
+                )
+        """
+        db = self.get_guild_db(guild)
+        gens = []
+        async with db.execute(sql) as cursor:
+            cursor.row_factory = LetsTryBallot.from_row
+            async for ballot in cursor:
+                gens.append(self.finalize_ballot(guild, ballot))
+
+        await gather(*gens)
 
 
 async def setup(bot):

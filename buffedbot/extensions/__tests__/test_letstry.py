@@ -105,6 +105,7 @@ async def letstry(mock_guild_db, mock_bot, steam_game, mock_settings):
     await letstry.cog_load()
     with mock.patch.object(letstry, "get_steam_game", return_value=steam_game):
         yield letstry
+    await letstry.cog_unload()
 
 
 @pytest_asyncio.fixture
@@ -850,3 +851,55 @@ async def test_finalize(
     await invoke_command(letstry, "letstry ballot finalize", default_thread_context)
 
     default_thread_context.reply.assert_called_with(StringContains("Ballot finalized"))
+
+
+@pytest.mark.asyncio
+async def test_finalize_ballots(
+    letstry,
+    create_default_ballot,
+    invoke_command,
+    default_thread_context,
+    default_guild_context,
+    default_game_name,
+    other_game_name,
+    default_member,
+    click_button,
+    other_member,
+    inject_settings_guild_get,
+    default_channel,
+):
+    await invoke_command(letstry, "letstry ballots", default_guild_context)
+    assert_called_with_ballot_embed(
+        default_guild_context.reply,
+        Nowish(),
+        Nowish(),
+        Nowish("3 days"),
+        "open",
+        [default_game_name, other_game_name],
+    )
+
+    interaction = await click_button(
+        default_member, default_guild_context.reply, "Vote now"
+    )
+    interaction.response.send_message.assert_called_with(
+        StringContains("Which game would you like to vote for"),
+        view=mock.ANY,
+        ephemeral=True,
+        delete_after=mock.ANY,
+    )
+
+    interaction = await click_button(
+        default_member, interaction.response.send_message, default_game_name
+    )
+    interaction.response.edit_message.assert_called_with(
+        content=StringContains("Vote recorded"), view=None, delete_after=mock.ANY
+    )
+    await invoke_command(
+        letstry, "letstry ballot duration", default_thread_context, "0 min"
+    )
+
+    inject_settings_guild_get("letstry-announcement-channel", default_channel.id)
+    await letstry.finalize_guild_ballots(default_guild_context.guild)
+    default_channel.send.assert_called_with(
+        StringContains("ballot just completed"), embed=mock.ANY
+    )
