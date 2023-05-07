@@ -185,7 +185,7 @@ def sqldatarow(
             @classmethod
             async def select_fetchone(
                 cls, db, where: Mapping[str, str], logic: Literal["AND", "OR"] = "OR"
-            ):
+            ) -> "_":
                 async with cls.select(db, where, logic) as cursor:
                     return await cursor.fetchone()
 
