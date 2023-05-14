@@ -223,24 +223,47 @@ def create_get_cog_mock(mock_bot):
 
 
 def make_channel(guild, spawned_thread=None):
+    def create_thread(*args, **kwargs):
+        guild.threads.append(spawned_thread)
+        return spawned_thread
+
     channel = namedtuple("Channel", ["id", "reply", "create_thread", "guild", "send"])(
         1236547890,
         mock.AsyncMock(),
-        mock.AsyncMock(return_value=spawned_thread),
+        mock.AsyncMock(side_effect=create_thread),
         guild,
         mock.AsyncMock(),
     )
+
     guild.channels.append(channel)
     return channel
 
 
 def make_guild(id):
     def get_channel_or_thread(id):
-        return [c for c in guild.channels if c.id == id][0]
+        return [c for c in guild.channels + guild.threads if c.id == id][0]
+
+    def get_thread(id):
+        return [t for t in guild.threads if t.id == id][0]
 
     guild = namedtuple(
-        "Guild", ["id", "get_channel_or_thread", "fetch_channel", "channels"]
-    )(id, mock.Mock(side_effect=get_channel_or_thread), mock.AsyncMock(), [])
+        "Guild",
+        [
+            "id",
+            "get_channel_or_thread",
+            "fetch_channel",
+            "channels",
+            "threads",
+            "get_thread",
+        ],
+    )(
+        id,
+        mock.Mock(side_effect=get_channel_or_thread),
+        mock.AsyncMock(),
+        [],
+        [],
+        mock.Mock(side_effect=get_thread),
+    )
 
     return guild
 

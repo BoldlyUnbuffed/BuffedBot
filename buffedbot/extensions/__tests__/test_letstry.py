@@ -901,7 +901,7 @@ async def test_finalize_ballots(
     inject_settings_guild_get("letstry-announcement-channel", default_channel.id)
     await letstry.finalize_guild_ballots(default_guild_context.guild)
     default_channel.send.assert_called_with(
-        StringContains("ballot just completed"), embed=mock.ANY
+        StringContains("ballot just completed"), embeds=[mock.ANY, mock.ANY]
     )
 
     await invoke_command(

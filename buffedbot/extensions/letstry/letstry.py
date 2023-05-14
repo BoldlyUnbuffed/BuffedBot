@@ -94,6 +94,12 @@ def sqldatarow(
         class _(parent):
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, **kwargs)
+                self._changed = set()
+
+            def __setattr__(self, prop, val):
+                if hasattr(self, "_changed"):
+                    self._changed.add(prop)
+                super().__setattr__(prop, val)
 
             @classmethod
             @property
@@ -143,17 +149,17 @@ def sqldatarow(
 
             @classmethod
             @property
-            def column_names(cls):
-                return (f.name for f in dataclasses.fields(cls))
+            def column_names(cls) -> set[str]:
+                return {f.name for f in dataclasses.fields(cls)}
 
             @classmethod
             @property
-            def non_computed_column_names(cls):
-                return (
+            def non_virtual_column_names(cls) -> set[str]:
+                return {
                     f.name
                     for f in dataclasses.fields(cls)
                     if not "virtual" in f.metadata
-                )
+                }
 
             @staticmethod
             def placeholders(names: Iterable[str]):
@@ -291,11 +297,11 @@ def sqldatarow(
                 """
 
             async def insert(self, db):
-                stmt = self.insert_stmt()
                 async with db.execute(
                     self.insert_stmt(), self.placeholder_values
                 ) as cursor:
                     await db.commit()
+                    self._changed.clear()
                     if len(notnone(primary_key)) == 1:
                         setattr(self, notnone(primary_key)[0], cursor.lastrowid)
                 return self
@@ -304,12 +310,13 @@ def sqldatarow(
             def update_stmt(
                 cls,
                 where: Iterable[str] = [],
-                values: Optional[Mapping[str, str]] = None,
+                columns: Optional[set[str]] = None,
             ):
-                if values is None:
-                    placeholders = cls.non_computed_column_names
-                else:
-                    placeholders = values.keys()
+                placeholders = set(cls.non_virtual_column_names)
+                if columns is not None:
+                    assert len(columns) != 0
+                    placeholders &= set(columns)
+
                 sql = f"""
                     UPDATE
                         {cls.table_name}
@@ -319,12 +326,16 @@ def sqldatarow(
                 """
                 return sql
 
-            async def update(self, db):
+            async def update(self, db) -> int:
                 cursor = await db.execute(
-                    self.update_stmt(self.primary_key_match().keys()),
+                    self.update_stmt(
+                        self.primary_key_match().keys(),
+                        self._changed,
+                    ),
                     self.placeholder_values,
                 )
                 await db.commit()
+                self._changed.clear()
                 return cursor.rowcount
 
             async def delete(self, db):
@@ -345,8 +356,12 @@ def sqldatarow(
             @property
             def placeholder_values(self):
                 return {
-                    name: getattr(self, name) for name in self.non_computed_column_names
+                    name: getattr(self, name) for name in self.non_virtual_column_names
                 }
+
+            @property
+            def changed(self):
+                return len(self._changed) > 0
 
         return _
 
@@ -429,9 +444,10 @@ class LetsTryBallotVoteView(discord.ui.View):
 
 
 class LetsTryBallotEditView(discord.ui.View):
-    def __init__(self, db, ballot, *, timeout=180):
+    def __init__(self, db, ballot, *, timeout=60 * 60):
         super().__init__(timeout=timeout)
 
+        self.message: Optional[discord.Message] = None
         self.db = db
         self.ballot = ballot
 
@@ -458,25 +474,62 @@ class LetsTryBallotEditView(discord.ui.View):
     async def on_submit_button_click(
         self, button: discord.ui.Button, interaction: discord.Interaction
     ):
-        pass
+        db = self.db
+        self.ballot.staging = False
+
+        await self.update_ballot(interaction)
+        await interaction.response.send_message(
+            f"*Ballot submitted.*", ephemeral=True, delete_after=10
+        )
 
     async def on_close_button_click(
         self, button: discord.ui.Button, interaction: discord.Interaction
     ):
-        pass
+        db = self.db
+        dt = datetime.now(tz=timezone.utc)
+        self.ballot.date_close = dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        await self.update_ballot(interaction)
+        await interaction.response.send_message(
+            f"*Ballot closed.*", ephemeral=True, delete_after=10
+        )
 
     async def on_open_button_click(
         self, button: discord.ui.Button, interaction: discord.Interaction
     ):
-        pass
+        db = self.db
+        dt = datetime.now(tz=timezone.utc)
+        self.ballot.date_open = dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        await self.update_ballot(interaction)
+        await interaction.response.send_message(
+            f"*Ballot opened.*", ephemeral=True, delete_after=10
+        )
+
+    async def update_ballot(self, interaction):
+        db = self.db
+
+        await self.ballot.update(db)
+        await self.ballot.refresh(db)
+
+        coros = [
+            self.ballot.update_thread(interaction.guild),
+        ]
+        if interaction.message is not None:
+            coros.append(self.update_message(interaction.message))
+
+        await gather(*coros)
+
+    async def update_message(self, message):
+        embed = await LetsTryBallotGame.as_embed(self.db, self.ballot)
+        await message.edit(
+            embed=embed, view=LetsTryBallotEditView(self.db, self.ballot)
+        )
 
     async def interaction_check(self, interaction):
         return await can_manage_ballots().predicate(
             make_interaction_context(interaction)
         )
-
-    def setMessage(self, message):
-        self.message = message
 
     async def on_error(self, interaction, error, item):
         verbose_exceptions = [commands.CheckFailure, IntegrityError]
@@ -492,15 +545,18 @@ class LetsTryBallotEditView(discord.ui.View):
         )
 
     async def on_timeout(self):
-        if self.message:
-            await self.message.edit(view=None)
-            self.message = None
+        message = self.message
+        if message is not None:
+            await message.edit(view=None)
+
+        self.message = None
         return await super().on_timeout()
 
 
 class LetsTryBallotVoteNowView(discord.ui.View):
     def __init__(self, db, ballot, *, timeout=3 * 60 * 60 * 24):
         super().__init__(timeout=timeout)
+        self.message: Optional[discord.Message] = None
         self.db = db
         self.ballot = ballot
 
@@ -538,12 +594,10 @@ class LetsTryBallotVoteNowView(discord.ui.View):
             delete_after=view.timeout,
         )
 
-    def setMessage(self, message: discord.Message):
-        self.message = message
-
     async def on_timeout(self):
-        if self.message is not None:
-            await self.message.edit(view=None)
+        message = self.message
+        if message is not None:
+            await message.edit(view=None)
         self.message = None
         return await super().on_timeout()
 
@@ -579,6 +633,13 @@ class LetsTryBallot:
         )
         embed.add_field(name=" ", value=" ")
         return embed
+
+    async def update_thread(self, guild):
+        thread = guild.get_thread(self.discord_thread_id)
+        if not self.staging:
+            await thread.edit(
+                name=f'Ballot {datetime.fromisoformat(self.date_created).strftime("%Y-%m-%d")}'
+            )
 
 
 @sqldatarow("letstry_games")
@@ -758,7 +819,7 @@ class LetsTry(
         return await ctx.invoke(self.bot.get_command("letstry games list"), state=state)
 
     @letstry.command(name="ballots")
-    async def ballots(self, ctx):
+    async def ballots(self, ctx: commands.Context):
         """Lists ballots open for votes."""
         db = self.get_guild_db(ctx.guild)
         sql = f"""{LetsTryBallot.select_stmt()} WHERE state in ("open", "submitted")"""
@@ -775,8 +836,7 @@ class LetsTry(
                     async for ballot_game, game in cursor:
                         LetsTryBallotGame.add_to_embed(embed, ballot_game, game)
 
-                message = await ctx.reply(embed=embed, view=view, silent=True)
-                view.setMessage(message)
+                view.message = await ctx.reply(embed=embed, view=view, silent=True)
             if ballot is None:
                 await ctx.reply("*No ballots found.*")
 
@@ -974,13 +1034,28 @@ class LetsTry(
         ballot.finalized = True
         await ballot.update(db)
 
-        embed = await LetsTryBallotGame.as_embed(db, ballot)
+        ballot_embed = ballot.as_embed()
+        winner = None
+        async with LetsTryBallotGame.join_select(
+            db, "game_id", ballot.primary_key_match()
+        ) as cursor:
+            async for ballot_game, game in cursor:
+                if winner is None or winner[0].votes < ballot_game.votes:
+                    winner = ballot_game, game
+                LetsTryBallotGame.add_to_embed(ballot_embed, ballot_game, game)
+
+        assert winner is not None
+
         # Notify announcement channel about finished ballot
         channel = await self.get_announcement_channel(guild)
         if channel is None:
             return
+
+        embeds = [ballot_embed, winner[1].as_embed()]
+
         await channel.send(
-            "A ballot just completed! Congratulations to the winner!", embed=embed
+            f"A ballot just completed! Congratulations to the winner {winner[1].name}!",
+            embeds=embeds,
         )
 
         # TODO: Notify proposers about election (mention on annoucement?)
@@ -1094,8 +1169,12 @@ class LetsTry(
         db = self.get_guild_db(thread.guild)
         ballot = LetsTryBallot.from_partial({"discord_thread_id": thread.id})
         await ballot.insert(db)
-        await thread.send(
-            "*Ballot created. Please add games and set a start date and time.*"
+        await ballot.refresh(db)
+
+        edit_view = LetsTryBallotEditView(db, ballot)
+        edit_view.message = await thread.send(
+            embed=ballot.as_embed(),
+            view=edit_view,
         )
 
     @ballot.command(name="finalize")
@@ -1150,10 +1229,7 @@ class LetsTry(
 
         # TODO: Notify proposers of the ballot containing their proposal
 
-        await ctx.channel.edit(
-            name=f'Ballot {datetime.fromisoformat(ballot.date_created).strftime("%Y-%m-%d")}'
-        )
-        await ctx.reply(f"Ballot submitted.")
+        await gather(ballot.update_thread(ctx.guild), ctx.reply(f"Ballot submitted."))
 
     @is_ballot_thread()
     @ballot.command(name="duration")
@@ -1183,18 +1259,10 @@ class LetsTry(
         ballot = await self.get_ballot(ctx.channel)
         if ballot is None:
             return await ctx.reply(f"{SOMETHING_WENT_WRONG}")
-        embed = ballot.as_embed()
-        async with LetsTryBallotGame.join_select(
-            db, "game_id", ballot.primary_key_match()
-        ) as cursor:
-            async for ballot_game, game in cursor:
-                LetsTryBallotGame.add_to_embed(embed, ballot_game, game)
-
+        embed = await LetsTryBallotGame.as_embed(db, ballot)
         edit_view = LetsTryBallotEditView(db, ballot)
 
-        message = await ctx.reply(embed=embed, view=edit_view)
-
-        edit_view.setMessage(message)
+        edit_view.message = await ctx.reply(embed=embed, view=edit_view)
 
     @is_ballot_thread()
     @ballot.command(name="open")
@@ -1343,13 +1411,13 @@ class LetsTry(
 
     async def finalize_guild_ballots(self, guild):
         db = self.get_guild_db(guild)
-        gens = []
+        coros = []
         where = {"state": "closed"}
         async with LetsTryBallot.select(db, where) as cursor:
             async for ballot in cursor:
-                gens.append(self.finalize_ballot(guild, ballot))
+                coros.append(self.finalize_ballot(guild, ballot))
 
-        await gather(*gens)
+        await gather(*coros)
 
 
 async def setup(bot):
