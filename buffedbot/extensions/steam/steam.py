@@ -20,12 +20,14 @@ from buffedbot.errors import (
     AttributeNotFoundError,
     ElementNotFoundError,
 )
+from dataclasses import dataclass
 
 
 from yarl import URL
 
 
-class Game(TypedDict):
+@dataclass
+class Game:
     name: str
     url: str
     description: str
@@ -34,6 +36,9 @@ class Game(TypedDict):
     review_count: int
     review_summary: str
     date_created: str
+
+    def as_embed(self) -> Embed:
+        return game_to_discord_embed(self)
 
 
 class SearchResult(TypedDict):
@@ -44,18 +49,18 @@ class SearchResult(TypedDict):
 
 def game_to_discord_embed(game: Game) -> Embed:
     embed = Embed(
-        title=game["name"], description=game["description"], url=game["url"]
-    ).set_image(url=game["image"])
+        title=game.name, description=game.description, url=game.url
+    ).set_image(url=game.image)
 
-    if game["review_count"] > 0:
+    if game.review_count > 0:
         embed.add_field(
-            name="Reviews", value=f'{game["review_summary"]} ({game["review_count"]:,})'
+            name="Reviews", value=f"{game.review_summary} ({game.review_count:,})"
         )
 
-    if game["price"] >= 0:
+    if game.price >= 0:
         embed.add_field(
             name="Price",
-            value=f'${game["price"]}' if game["price"] > 0 else "Free to play",
+            value=f"${game.price}" if game.price > 0 else "Free to play",
             inline=True,
         )
 
@@ -341,7 +346,9 @@ class Steam(commands.Cog, name="steam"):
         return match.group(1)
 
     async def store_game_in_cache(self, game: Game):
-        game_with_app_id = game | {"app_id": __class__.get_app_id_from_url(game["url"])}
+        game_with_app_id = game.__dict__ | {
+            "app_id": __class__.get_app_id_from_url(game.url)
+        }
         sql = f"""
             INSERT INTO
                 steam_games_cache {get_column_names(game_with_app_id)}
@@ -350,7 +357,7 @@ class Steam(commands.Cog, name="steam"):
             ON CONFLICT
                 (app_id)
             DO UPDATE SET
-                {", ".join([f"{name} = excluded.{name}" for name in game.keys()])}
+                {", ".join([f"{name} = excluded.{name}" for name in game.__dict__.keys()])}
             WHERE
                 date_created < excluded.date_created
         """

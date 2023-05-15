@@ -1047,11 +1047,15 @@ class LetsTry(
         assert winner is not None
 
         # Notify announcement channel about finished ballot
-        channel = await self.get_announcement_channel(guild)
+        channel, steam_game = await gather(
+            self.get_announcement_channel(guild), self.get_steam_game(winner[1].url)
+        )
         if channel is None:
             return
 
-        embeds = [ballot_embed, winner[1].as_embed()]
+        embeds = [ballot_embed]
+        if steam_game is not None:
+            embeds.append(steam_game.as_embed())
 
         await channel.send(
             f"A ballot just completed! Congratulations to the winner {winner[1].name}!",
@@ -1098,8 +1102,8 @@ class LetsTry(
 
         try:
             steam_game = await self.get_steam_game(url or name)
-            url = cast(str, steam_game["url"])
-            name = cast(str, steam_game["name"])
+            url = cast(str, steam_game.url)
+            name = cast(str, steam_game.name)
         except GameNotFoundError as e:
             if url is None or name is None:
                 raise e
@@ -1130,8 +1134,8 @@ class LetsTry(
             except GameNotFoundError as e:
                 return await ctx.reply(f"*{str(e)}*")
             else:
-                name = cast(str, game["name"])
-                url = cast(str, game["url"])
+                name = cast(str, game.name)
+                url = cast(str, game.url)
 
         db = self.get_guild_db(ctx.guild)
         try:
